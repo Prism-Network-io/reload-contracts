@@ -1191,7 +1191,7 @@ contract Reload is Context, IERC20, Ownable {
         require(success, "Transfer failed.");
     }
 
-    function setDev(address _liqAddr) public {
+    function setLiqAddr(address _liqAddr) public {
         require(_msgSender() == liqAddr, '!dev');
         liqAddr = _liqAddr;
     }
