@@ -752,7 +752,7 @@ interface IWETH {
     function withdraw(uint) external;
 }
 
-contract DeflectProtocol is Context, IERC20, Ownable {
+contract Reload is Context, IERC20, Ownable {
     using SafeMath for uint256;
     using Address for address;
 
