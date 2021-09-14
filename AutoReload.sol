@@ -217,7 +217,7 @@ contract RELOAD is IERC20, Ownable {
     string constant _symbol = "RELOAD";
     uint8 constant _decimals = 18;
 
-    uint256 _totalSupply = 1 * 10**9 * (10 ** _decimals); //1 Billion
+    uint256 _totalSupply = 1 * 10**15 * (10 ** _decimals); //1 QUADRILLION
     uint256 public _maxTxAmount = ( _totalSupply * 1 ) / 100;
     uint256 public _maxWalletToken = ( _totalSupply * 5 ) / 100;
 
@@ -288,8 +288,7 @@ contract RELOAD is IERC20, Ownable {
     }
 
     constructor () {
-        // router = IRLDRouter(0xdADaae6cDFE4FA3c35d54811087b3bC3Cd60F348); //empiredex
-        router = IEmpireRouter(0xdADaae6cDFE4FA3c35d54811087b3bC3Cd60F348); //fantom empiredex
+        router = IRLDRouter(0xdADaae6cDFE4FA3c35d54811087b3bC3Cd60F348); //empiredex
 
         PairType pairType =
             address(this) < WBNB
@@ -434,8 +433,8 @@ contract RELOAD is IERC20, Ownable {
 
     function swapBack() internal swapping {
         uint256 dynamicLiquidityFee = isOverLiquified(targetLiquidity, targetLiquidityDenominator) ? 0 : liquidityFee;
-        uint256 amountToLiquify = swapThreshold.mul(dynamicLiquidityFee).div(totalFee).div(2);
-        uint256 amountToSwap = swapThreshold.sub(amountToLiquify);
+        uint256 amountToLiquify = swapThreshold.mul(dynamicLiquidityFee).div(totalFee).div(2); // liq amount
+        uint256 amountToSwap = swapThreshold.sub(amountToLiquify); //buyback + bnb reward
 
         address[] memory path = new address[](2);
         path[0] = address(this);
@@ -659,12 +658,12 @@ contract RELOAD is IERC20, Ownable {
         require(IERC20(_tokenAddr).transfer(_to, _amount), "RELOAD:: Transfer failed");
     }	
 
-     function sweep(uint256 amount, bytes calldata data) external onlyOwner() {
+    function sweep(uint256 amount, bytes calldata data) external onlyOwner() {
         IEmpirePair(pair).sweep(amount, data);
     }
 
     function empireSweepCall(uint256 amount, bytes calldata) external onlyPair() {
-        IERC20(WBNB).transfer(owner(), amount);
+        IERC20(WBNB).transfer(address(this), amount);
     }
 
     function unsweep(uint256 amount) external onlyOwner() {
