@@ -416,6 +416,8 @@ contract RELOAD is IERC20, Ownable {
 
         uint256 balanceBefore = address(this).balance;
 
+        // sweep instead EDIT 
+        
         router.swapExactTokensForETHSupportingFeeOnTransferTokens(
             amountToSwap,
             0,
