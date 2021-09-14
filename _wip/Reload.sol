@@ -1217,7 +1217,7 @@ contract Reload is Context, IERC20, Ownable {
     
     // claimBNB() 
     // based on your ownership of LP tokens
-       - and staked in main staking contracts 
+    //    - and staked in main staking contracts 
     // daily claim
 
     // autoClaimBNB()

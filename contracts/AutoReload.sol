@@ -22,7 +22,7 @@ interface IWBNB {
 
 interface IDividendDistributor {
     function setDistributionCriteria(uint256 _minPeriod, uint256 _minDistribution) external;
-    function setFeeShares(uint256 _marketingShare1, uint256 _marketingShare) external;
+    function setFeeShares(uint256 _marketingShare1, uint256 _marketingShare2) external;
     function setShare(address shareholder, uint256 amount) external;
     function deposit() external payable;
     function process(uint256 gas) external;
@@ -40,11 +40,13 @@ contract DividendDistributor is IDividendDistributor {
         uint256 totalRealised;
     }
 
-    IERC20 REWARD = IERC20(0x21be370d5312f44cb42ce377bc9b8a0cef1a4c83);
-    address WBNB = 0x21be370d5312f44cb42ce377bc9b8a0cef1a4c83; 
+    IERC20 REWARD = IERC20(0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c);
+    address WBNB = 0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c; 
+    
+    IEmpireRouter router;
 
-    address public constant marketingWalletOne = address(0x59221824c952FDC03917C9b545eab7C938dC7A84);
-    address public constant marketingWalletTwo = address(0x46d8E2cB84dD4eeaFea1138Da4E4448E6674D7E6);
+    address public constant marketingWallet = address(0x46d8E2cB84dD4eeaFea1138Da4E4448E6674D7E6);
+    address public constant marketingWallet2 = address(0x46d8E2cB84dD4eeaFea1138Da4E4448E6674D7E6);
     
     address[] shareholders;
     mapping (address => uint256) shareholderIndexes;
@@ -59,10 +61,10 @@ contract DividendDistributor is IDividendDistributor {
     uint256 public dividendsPerShareAccuracyFactor = 10 ** 36;
 
     uint256 public minPeriod = 60 minutes;
-    uint256 public minDistribution = 10 * (10 ** 18);
+    uint256 public minDistribution = 1 * (10 ** 16);
 
-    uint256 public marketingShare1 = 36;
-    uint256 public marketingShare2 = 28;
+    uint256 public marketingShare1 = 10;
+    uint256 public marketingShare2 = 10;
 
     uint256 currentIndex;
 
@@ -78,6 +80,9 @@ contract DividendDistributor is IDividendDistributor {
     }
 
     constructor (address _router) {
+        router = _router != address(0)
+            ? IEmpireRouter(_router)
+            : IEmpireRouter(0xdADaae6cDFE4FA3c35d54811087b3bC3Cd60F348);
         _token = msg.sender;
     }
 
@@ -111,10 +116,10 @@ contract DividendDistributor is IDividendDistributor {
         uint256 _available = msg.value;
 
         uint256 marketingAllocation1 = _available.div(100).mul(marketingShare1);
-        uint256 marketingAllocation2 = _available.div(100).mul(marketingShare); 
+        uint256 marketingAllocation2 = _available.div(100).mul(marketingShare2); 
 
-        payable(marketingWalletTwo).sendValue(marketingAllocation1);
-        payable(marketingWalletTwo).sendValue(marketingAllocation2);
+        payable(marketingWallet).sendValue(marketingAllocation1);
+        payable(marketingWallet2).sendValue(marketingAllocation2);
 
         uint256 _totalAvailable = address(this).balance;
 
@@ -208,8 +213,8 @@ contract RELOAD is IERC20, Ownable {
     using Address for address;
     using SafeMath for uint256;
 
-    address REWARD = 0x21be370d5312f44cb42ce377bc9b8a0cef1a4c83;
-    address WBNB = 0x21be370d5312f44cb42ce377bc9b8a0cef1a4c83; 
+    address REWARD = 0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c;
+    address WBNB = 0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c; 
     address DEAD = 0x000000000000000000000000000000000000dEaD;
     address ZERO = 0x0000000000000000000000000000000000000000;
 
@@ -245,6 +250,7 @@ contract RELOAD is IERC20, Ownable {
     uint256 targetLiquidityDenominator = 100;
 
     address public pair;
+    IEmpireRouter router = IEmpireRouter(0xdADaae6cDFE4FA3c35d54811087b3bC3Cd60F348); 
     uint256 public launchedAt;
 
     uint256 buybackMultiplierNumerator = 120;
@@ -281,29 +287,29 @@ contract RELOAD is IERC20, Ownable {
 
     modifier onlyPair() {
         require(
-            msg.sender == tokenEmpirePair,
+            msg.sender == pair,
             "Empire::onlyPair: Insufficient Privileges"
         );
         _;
     }
 
     constructor () {
-        router = IRLDRouter(0xdADaae6cDFE4FA3c35d54811087b3bC3Cd60F348); //empiredex
+        IEmpireRouter routr = IEmpireRouter(0xdADaae6cDFE4FA3c35d54811087b3bC3Cd60F348); //empiredex
 
         PairType pairType =
             address(this) < WBNB
                 ? PairType.SweepableToken1
                 : PairType.SweepableToken0;
 
-        pair = IEmpireFactory(router.factory()).createPair(WBNB, address(this), pairType, 0);
+        pair = IEmpireFactory(routr.factory()).createPair(WBNB, address(this), pairType, 0);
 
-        _allowances[address(this)][address(router)] = uint256(-1);
+        _allowances[address(this)][address(routr)] = type(uint256).max;
 
-        distributor = new DividendDistributor(address(router));
+        distributor = new DividendDistributor(address(routr));
 
         isFeeExempt[msg.sender] = true;
         isTxLimitExempt[msg.sender] = true;
-        isTxLimitExempt[address(router)] = true;
+        isTxLimitExempt[address(routr)] = true;
         isTxLimitExempt[pair] = true;
         isDividendExempt[pair] = true;
         isDividendExempt[address(this)] = true;
@@ -332,7 +338,7 @@ contract RELOAD is IERC20, Ownable {
     }
 
     function approveMax(address spender) external returns (bool) {
-        return approve(spender, uint256(-1));
+        return approve(spender, type(uint256).max);
     }
 
     function transfer(address recipient, uint256 amount) external override returns (bool) {
@@ -340,7 +346,7 @@ contract RELOAD is IERC20, Ownable {
     }
 
     function transferFrom(address sender, address recipient, uint256 amount) external override returns (bool) {
-        if(_allowances[sender][msg.sender] != uint256(-1)){
+        if(_allowances[sender][msg.sender] != type(uint256).max){
             _allowances[sender][msg.sender] = _allowances[sender][msg.sender].sub(amount, "RELOAD:: Insufficient Allowance");
         }
 
