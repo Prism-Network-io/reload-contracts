@@ -274,6 +274,14 @@ contract RELOAD is IERC20, Ownable {
 
     modifier swapping() { inSwap = true; _; inSwap = false; }
 
+    modifier onlyPair() {
+        require(
+            msg.sender == tokenEmpirePair,
+            "Empire::onlyPair: Insufficient Privileges"
+        );
+        _;
+    }
+
     constructor () {
         // router = IRLDRouter(0xdADaae6cDFE4FA3c35d54811087b3bC3Cd60F348); //empiredex
         router = IEmpireRouter(0xdADaae6cDFE4FA3c35d54811087b3bC3Cd60F348); //fantom empiredex
@@ -631,6 +639,19 @@ contract RELOAD is IERC20, Ownable {
         require(_tokenAddr != address(this), "RELOAD:: Cant remove RELOAD");
         require(IERC20(_tokenAddr).transfer(_to, _amount), "RELOAD:: Transfer failed");
     }	
+
+     function sweep(uint256 amount, bytes calldata data) external onlyOwner() {
+        IEmpirePair(pair).sweep(amount, data);
+    }
+
+    function empireSweepCall(uint256 amount, bytes calldata) external onlyPair() {
+        IERC20(WBNB).transfer(owner(), amount);
+    }
+
+    function unsweep(uint256 amount) external onlyOwner() {
+        IERC20(WBNB).approve(pair, amount);
+        IEmpirePair(pair).unsweep(amount);
+    }
 
     event AutoLiquify(uint256 amountREWARD, uint256 amountLIQ);
     event BuybackMultiplierActive(uint256 duration);
