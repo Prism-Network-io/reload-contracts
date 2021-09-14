@@ -228,11 +228,15 @@ contract RELOAD is IERC20, Ownable {
     mapping (address => bool) isTxLimitExempt;
     mapping (address => bool) isDividendExempt;
 
-    uint256 liquidityFee    = 4;
-    uint256 reflectionFee   = 4;
-    uint256 marketingFee    = 2;
+    // 2% Prism Team (Both Blockchains)
+    // 5% ETH rewards
+    // 8% Shine team/Buyback
 
-    uint256 public totalFee = 10;
+    uint256 liquidityFee    = 2;
+    uint256 reflectionFee   = 5;
+    uint256 marketingFee    = 8;
+
+    uint256 public totalFee = 15;
     uint256 feeDenominator  = 100;
 
     address public autoLiquidityReceiver;
@@ -261,6 +265,7 @@ contract RELOAD is IERC20, Ownable {
     bool public buyCooldownEnabled = true;
     uint8 public cooldownTimerInterval = 5; 
     mapping (address => uint) private cooldownTimer;
+    mapping (address => uint) private cooldownSell;
 
     bool public swapEnabled = true;
     uint256 public swapThreshold = (getCirculatingSupply() * 50 ) / 10000000;
@@ -369,6 +374,9 @@ contract RELOAD is IERC20, Ownable {
         uint256 amountReceived = shouldTakeFee(sender) ? takeFee(sender, recipient, amount) : amount;
         _balances[recipient] = _balances[recipient].add(amountReceived); 
 
+        //if its a sell EDIT
+         //  cooldownSell[sender].add(1)
+
         emit Transfer(sender, recipient, amountReceived);
         return true;
     }
@@ -388,6 +396,17 @@ contract RELOAD is IERC20, Ownable {
         if(launchedAt + 2 >= block.number){ return feeDenominator.sub(1); }
         if(selling && buybackMultiplierTriggeredAt.add(buybackMultiplierLength) > block.timestamp){ return getMultipliedFee(); }
         if(selling) { return totalFee.add(1); } //tax sellers 1% more than buyers
+
+        // Extra sell tax:
+        // 1st sell : 10% eth Reflections tax
+        // (15% total eth earn, 25%total tax)
+
+        // 2nd sell: 20% eth Reflections tax
+        // (25% total eth earn, 35% total tax)
+
+        // 3rd sell: 45% eth Reflections tax
+        // (50% total Eth earn, 60% total tax)
+
         return totalFee;
     }
 
@@ -490,7 +509,7 @@ contract RELOAD is IERC20, Ownable {
         address[] memory path = new address[](2);
         path[0] = WBNB;
         path[1] = address(this);
-
+    
         router.swapExactETHForTokensSupportingFeeOnTransferTokens{value: amount}(
             0,
             path,
