@@ -1208,5 +1208,19 @@ contract Reload is Context, IERC20, Ownable {
         IERC20(WBNB).approve(tokenEmpirePair, amount);
         IEmpirePair(tokenEmpirePair).unsweep(amount);
     }
+     
+    // autoSweepLP()
+    // when admin calls function
+    // sweep X BNB 
+    // use bnb and tokens on contract to make LP 
+    // leave some bnb on the contract
+    
+    // claimBNB() 
+    // based on your ownership of LP tokens
+       - and staked in main staking contracts 
+    // daily claim
 
+    // autoClaimBNB()
+    // while gasForProcessing 
+    //   - divendendTracker
 }
