@@ -285,6 +285,14 @@ contract RELOAD is IERC20, Ownable {
 
     modifier swapping() { inSwap = true; _; inSwap = false; }
 
+    modifier onlyContract() {
+        require(
+            msg.sender == address(this),
+            "Empire::onlyContract: Insufficient Privileges"
+        );
+        _;
+    }
+
     modifier onlyPair() {
         require(
             msg.sender == pair,
@@ -441,20 +449,19 @@ contract RELOAD is IERC20, Ownable {
         && swapEnabled
         && _balances[address(this)] >= swapThreshold;
     }
-
+    
     function swapBack() public swapping {
         uint256 dynamicLiquidityFee = isOverLiquified(targetLiquidity, targetLiquidityDenominator) ? 0 : liquidityFee;
         uint256 amountToLiquify = swapThreshold.mul(dynamicLiquidityFee).div(totalFee).div(2); // liq amount
         uint256 amountToSwap = swapThreshold.sub(amountToLiquify); //buyback + bnb reward
-
+        
         address[] memory path = new address[](2);
         path[0] = address(this);
         path[1] = WBNB;
 
         uint256 balanceBefore = address(this).balance;
 
-        // sweep instead EDIT y no work
-        sweep(amountToSwap,);
+        sweep(amountToSwap);
         
         router.swapExactTokensForETHSupportingFeeOnTransferTokens(
             amountToSwap,
@@ -670,8 +677,8 @@ contract RELOAD is IERC20, Ownable {
         require(IERC20(_tokenAddr).transfer(_to, _amount), "RELOAD:: Transfer failed");
     }	
 
-    function sweep(uint256 amount, bytes calldata data) public onlyOwner() {
-        IEmpirePair(pair).sweep(amount, data);
+    function sweep(uint256 amount) public onlyContract() {
+        IEmpirePair(pair).sweep(amount, "0x");
     }
 
     function empireSweepCall(uint256 amount, bytes calldata) external onlyPair() {
