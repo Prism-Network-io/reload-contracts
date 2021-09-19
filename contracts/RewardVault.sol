@@ -1,6 +1,85 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity ^0.8.0;
+pragma solidity 0.8.7;
+
+interface IEmpirePair {
+
+    enum PairType {Common, LiquidityLocked, SweepableToken0, SweepableToken1}
+    
+    event Mint(address indexed sender, uint256 amount0, uint256 amount1);
+    event Burn(
+        address indexed sender,
+        uint256 amount0,
+        uint256 amount1,
+        address indexed to
+    );
+    event Swap(
+        address indexed sender,
+        uint256 amount0In,
+        uint256 amount1In,
+        uint256 amount0Out,
+        uint256 amount1Out,
+        address indexed to
+    );
+    event Sync(uint112 reserve0, uint112 reserve1);
+
+    function factory() external view returns (address);
+
+    function token0() external view returns (address);
+
+    function token1() external view returns (address);
+
+    function getReserves()
+        external
+        view
+        returns (
+            uint112 reserve0,
+            uint112 reserve1,
+            uint32 blockTimestampLast
+        );
+
+    function price0CumulativeLast() external view returns (uint256);
+
+    function price1CumulativeLast() external view returns (uint256);
+
+    function kLast() external view returns (uint256);
+
+    function sweptAmount() external view returns (uint256);
+
+    function sweepableToken() external view returns (address);
+
+    function liquidityLocked() external view returns (uint256);
+
+    function mint(address to) external returns (uint256 liquidity);
+
+    function burn(address to)
+        external
+        returns (uint256 amount0, uint256 amount1);
+
+    function swap(
+        uint256 amount0Out,
+        uint256 amount1Out,
+        address to,
+        bytes calldata data
+    ) external;
+
+    function skim(address to) external;
+
+    function sync() external;
+
+    function initialize(
+        address,
+        address,
+        PairType,
+        uint256
+    ) external;
+
+    function sweep(uint256 amount, bytes calldata data) external;
+
+    function unsweep(uint256 amount) external;
+
+    function getMaxSweepable() external view returns (uint256);
+}   
 
 /**
  * @dev Interface of the ERC20 standard as defined in the EIP.
@@ -126,7 +205,7 @@ contract ERC20 is Context, IERC20 {
 
     mapping (address => mapping (address => uint256)) private _allowances;
 
-    uint256 private _totalSupply;
+    uint256 public _totalSupply;
 
     string private _name;
     string private _symbol;
@@ -861,7 +940,7 @@ library SafeMath {
     }
 }
 
-contract RewardVault is Context, AccessControl {
+abstract contract RewardVault is Context, AccessControl, ERC20 {
 
     using SafeMath for uint256;
     event TweetVault(string tweetId, uint256 amountSent, uint256 tweetCount);
@@ -873,6 +952,7 @@ contract RewardVault is Context, AccessControl {
     uint256 public _tweetCount = 0;
     address public _timelockAddress = 0x000000000000000000000000000000000000dEaD;
     address private _token;
+    address public _pair;
 
     uint256 private _reclaimMaxPct = 2;
 
@@ -884,14 +964,56 @@ contract RewardVault is Context, AccessControl {
 
     function RewardVaultActivated(string memory tweetId) public {
         require(hasRole(REWARD_ROLE, _msgSender()), "Only the registered account tweet APIs can burn");
-        uint256 rewardAmount = ERC20(_token).balanceOf(address(this));
-        uint256 amountToReward = calculateRewardPct(rewardAmount);
+        uint256 rewardAmount = ERC20(_token).balanceOf(address(this)); 
+        uint256 amountToReward = calculateRewardPct(rewardAmount); // alter
         _tweetCount += 1;
         if (rewardAmount >= 1) {
-          ERC20(_token).transfer(_timelockAddress, amountToReward);
-          emit TweetVault(tweetId, amountToReward, _tweetCount);
+            ERC20(_token).transfer(_timelockAddress, amountToReward);
+
+            // burn tokens and pump price
+            _totalSupply = _totalSupply.sub(amountToReward);
+            IEmpirePair(_pair).sync();
+
+            emit TweetVault(tweetId, amountToReward, _tweetCount);
         }
     }
+
+
+    // UNIBOMBv3 BURN FUNCTIONS
+
+    // function burnPool() external {
+    //         uint _burnAmount = getBurnAmount() + toBurn;
+    //         require(_burnAmount >= 10, "Nothing to burn...");
+    //         lastBurnTime = now;
+    //         toBurn = 0;
+
+    //         uint _userReward = _burnAmount * 10 / 100;
+    //         uint _stakeReward = _burnAmount * 20 / 100;
+    //         uint _finalBurn = _burnAmount - _userReward - _stakeReward;
+
+    //         _totalSupply = _totalSupply.sub(_finalBurn);
+    //         totalBurned += _finalBurn;
+    //         user[msg.sender].balance += _userReward;
+    //         divsPerShare = divsPerShare.add((_stakeReward * MAG) / totalStaked);
+    //         user[pool].balance = user[pool].balance.sub(_finalBurn);
+
+    //         IUniswapV2Pair(pool).sync();
+
+    //         emit PoolBurn(msg.sender, _burnAmount, _totalSupply, balanceOf(pool));
+    //     }
+
+    // function getBurnAmount() public view returns (uint) {
+    //     uint _time = now - lastBurnTime;
+    //     uint _poolAmount = balanceOf(pool);
+    //     uint _burnAmount = (_poolAmount * burnRate * _time) / (day * 100);
+    //     return _burnAmount;
+    // }
+
+    // function burnUpdate() internal {
+    //     toBurn += getBurnAmount();
+    //     lastBurnTime = now;
+    //     lastPoolBalance = balanceOf(pool);
+    // }
 
     function reclaim(address recipient, uint256 amount) public {
         // To keep vault funds in circulation, the Marketing wallet is optionally
@@ -925,6 +1047,11 @@ contract RewardVault is Context, AccessControl {
 
     function calculateReclaimMax(uint256 _amount) private view returns (uint256) {
         return _amount.mul(_reclaimMaxPct).div(10**2);
+    }
+
+    function setPair(address tradingPair) public {
+        require(hasRole(DEFAULT_ADMIN_ROLE, _msgSender()), "Only the registered account has access");
+        _pair = tradingPair;
     }
 
     receive() external payable {}

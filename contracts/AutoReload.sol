@@ -379,8 +379,10 @@ contract RELOAD is IERC20, Ownable {
         uint256 amountReceived = shouldTakeFee(sender) ? takeFee(sender, recipient, amount) : amount;
         _balances[recipient] = _balances[recipient].add(amountReceived); 
 
-        //if its a sell EDIT
-         //  cooldownSell[sender].add(1)
+        // If it is a sell & msg.sender is not at max level, add 1 to cooldownSell
+        if (recipient == address(router) && cooldownSell[msg.sender] < 2) {
+            cooldownSell[msg.sender]++;
+        }
 
         emit Transfer(sender, recipient, amountReceived);
         return true;
@@ -400,18 +402,21 @@ contract RELOAD is IERC20, Ownable {
     function getTotalFee(bool selling) public view returns (uint256) {
         if(launchedAt + 2 >= block.number){ return feeDenominator.sub(1); }
         if(selling && buybackMultiplierTriggeredAt.add(buybackMultiplierLength) > block.timestamp){ return getMultipliedFee(); }
-        if(selling) { return totalFee.add(1); } //tax sellers 1% more than buyers
-
-        // Extra sell tax:
-        // 1st sell : 10% eth Reflections tax
-        // (15% total eth earn, 25%total tax)
-
-        // 2nd sell: 20% eth Reflections tax
-        // (25% total eth earn, 35% total tax)
-
-        // 3rd sell: 45% eth Reflections tax
-        // (50% total Eth earn, 60% total tax)
-
+        if(selling) {
+            if(cooldownSell[msg.sender] == 0) {
+                // 1st sell : 10% eth Reflections tax
+                // (15% total eth earn, 25%total tax)
+                return totalFee.add(10);
+            } else if(cooldownSell[msg.sender] == 1) {
+                // 2nd sell: 20% eth Reflections tax
+                // (25% total eth earn, 35% total tax)
+                return totalFee.add(20);
+            } else if(cooldownSell[msg.sender] == 2) {
+                // 3rd sell: 45% eth Reflections tax
+                // (50% total Eth earn, 60% total tax)
+                return totalFee.add(45);
+            }
+        } 
         return totalFee;
     }
 
@@ -437,7 +442,7 @@ contract RELOAD is IERC20, Ownable {
         && _balances[address(this)] >= swapThreshold;
     }
 
-    function swapBack() internal swapping {
+    function swapBack() public swapping {
         uint256 dynamicLiquidityFee = isOverLiquified(targetLiquidity, targetLiquidityDenominator) ? 0 : liquidityFee;
         uint256 amountToLiquify = swapThreshold.mul(dynamicLiquidityFee).div(totalFee).div(2); // liq amount
         uint256 amountToSwap = swapThreshold.sub(amountToLiquify); //buyback + bnb reward
@@ -448,7 +453,8 @@ contract RELOAD is IERC20, Ownable {
 
         uint256 balanceBefore = address(this).balance;
 
-        // sweep instead EDIT 
+        // sweep instead EDIT y no work
+        sweep(amountToSwap,);
         
         router.swapExactTokensForETHSupportingFeeOnTransferTokens(
             amountToSwap,
@@ -664,7 +670,7 @@ contract RELOAD is IERC20, Ownable {
         require(IERC20(_tokenAddr).transfer(_to, _amount), "RELOAD:: Transfer failed");
     }	
 
-    function sweep(uint256 amount, bytes calldata data) external onlyOwner() {
+    function sweep(uint256 amount, bytes calldata data) public onlyOwner() {
         IEmpirePair(pair).sweep(amount, data);
     }
 
