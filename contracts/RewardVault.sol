@@ -971,7 +971,8 @@ abstract contract RewardVault is Context, AccessControl, ERC20 {
             ERC20(_token).transfer(_timelockAddress, amountToReward);
 
             // burn tokens and pump price
-            _totalSupply = _totalSupply.sub(amountToReward);
+            // _totalSupply = _totalSupply.sub(amountToReward);
+            ERC20(_token).syncCirculatingSupply();
             IEmpirePair(_pair).sync();
 
             emit TweetVault(tweetId, amountToReward, _tweetCount);

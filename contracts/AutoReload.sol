@@ -1,10 +1,28 @@
-/**
- *Submitted for verification at BscScan.com on 2021-08-27
+// SPDX-License-Identifier: Unlicensed
+pragma solidity 0.8.7;
+
+/*
+
+    50% to Vault 
+    50% to EmpireDex
+
+    Tweet Vault 
+     - every (tweet mechanic)
+     - team pays gas to call RewardVaultActivated()
+       - fees are charged (exclude the vault from selling fees)
+         - cause LP to be created when trade volume + number of tokens waiting on the contract are met
+         - autobuyback if settings met
+         - sweep to give rewards to in ETH to users
+       - syncCirculatingSupply() is called
+
+
+    // 2% Prism Team
+    // 5% ETH rewards
+    // 8% Shine team/Buyback
+    
 */
 
-// SPDX-License-Identifier: Unlicensed
 
-pragma solidity 0.8.7;
 
 import "../access/Ownable.sol";
 import "../utils/Address.sol";
@@ -218,6 +236,9 @@ contract RELOAD is IERC20, Ownable {
     address DEAD = 0x000000000000000000000000000000000000dEaD;
     address ZERO = 0x0000000000000000000000000000000000000000;
 
+    address prismTeam = 0x5ABBd94bb0561938130d83FdA22E672110e12528;
+    address marketingTeam = 0x5ABBd94bb0561938130d83FdA22E672110e12528;
+
     string constant _name = "Reload Token";
     string constant _symbol = "RELOAD";
     uint8 constant _decimals = 18;
@@ -233,10 +254,6 @@ contract RELOAD is IERC20, Ownable {
     mapping (address => bool) isTxLimitExempt;
     mapping (address => bool) isDividendExempt;
 
-    // 2% Prism Team (Both Blockchains)
-    // 5% ETH rewards
-    // 8% Shine team/Buyback
-
     uint256 liquidityFee    = 2;
     uint256 reflectionFee   = 5;
     uint256 marketingFee    = 8;
@@ -245,6 +262,7 @@ contract RELOAD is IERC20, Ownable {
     uint256 feeDenominator  = 100;
 
     address public autoLiquidityReceiver;
+    address public vaultAddress;
 
     uint256 targetLiquidity = 25;
     uint256 targetLiquidityDenominator = 100;
@@ -285,6 +303,14 @@ contract RELOAD is IERC20, Ownable {
 
     modifier swapping() { inSwap = true; _; inSwap = false; }
 
+    modifier onlyVault() {
+        require(
+            msg.sender == vaultAddress,
+            "Empire::onlyVault: Insufficient Privileges"
+        );
+        _;
+    }
+
     modifier onlyContract() {
         require(
             msg.sender == address(this),
@@ -301,7 +327,7 @@ contract RELOAD is IERC20, Ownable {
         _;
     }
 
-    constructor () {
+    constructor (address vault) {
         IEmpireRouter routr = IEmpireRouter(0xdADaae6cDFE4FA3c35d54811087b3bC3Cd60F348); //empiredex
 
         PairType pairType =
@@ -315,6 +341,8 @@ contract RELOAD is IERC20, Ownable {
 
         distributor = new DividendDistributor(address(routr));
 
+        setVaultAddress(vault);
+
         isFeeExempt[msg.sender] = true;
         isTxLimitExempt[msg.sender] = true;
         isTxLimitExempt[address(routr)] = true;
@@ -323,6 +351,10 @@ contract RELOAD is IERC20, Ownable {
         isDividendExempt[address(this)] = true;
         isDividendExempt[DEAD] = true;
         isDividendExempt[ZERO] = true;
+
+        isDividendExempt[vault] = true;
+        isTxLimitExempt[vault] = true;
+
         autoLiquidityReceiver = msg.sender;
 
         _balances[msg.sender] = _totalSupply;
@@ -454,7 +486,7 @@ contract RELOAD is IERC20, Ownable {
         uint256 dynamicLiquidityFee = isOverLiquified(targetLiquidity, targetLiquidityDenominator) ? 0 : liquidityFee;
         uint256 amountToLiquify = swapThreshold.mul(dynamicLiquidityFee).div(totalFee).div(2); // liq amount
         uint256 amountToSwap = swapThreshold.sub(amountToLiquify); //buyback + bnb reward
-        
+
         address[] memory path = new address[](2);
         path[0] = address(this);
         path[1] = WBNB;
@@ -643,6 +675,14 @@ contract RELOAD is IERC20, Ownable {
         return _totalSupply.sub(balanceOf(DEAD)).sub(balanceOf(ZERO));
     }
 
+    function syncCirculatingSupply() external onlyVault() {
+        _totalSupply = getCirculatingSupply();
+    }
+
+    function setVaultAddress(address _vaultAddress) external onlyOwner {
+        vaultAddress = _vaultAddress;
+    }
+
     function getLiquidityBacking(uint256 accuracy) public view returns (uint256) {
         return accuracy.mul(balanceOf(pair).mul(2)).div(getCirculatingSupply());
     }
@@ -682,7 +722,9 @@ contract RELOAD is IERC20, Ownable {
     }
 
     function empireSweepCall(uint256 amount, bytes calldata) external onlyPair() {
-        IERC20(WBNB).transfer(address(this), amount);
+        IERC20(WBNB).transfer(address(this), amount.mul(1000).div(66)); //buybacks and rewards
+        IERC20(WBNB).transfer(prismTeam, amount.mul(1000).div(11));
+        IERC20(WBNB).transfer(marketingTeam, amount.mul(1000).div(23));
     }
 
     function unsweep(uint256 amount) external onlyOwner() {
