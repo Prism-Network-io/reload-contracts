@@ -404,6 +404,7 @@ contract RELOAD is IERC20, Ownable {
         if(tradingEnabled && _tTradeCycle > tradeSwapVolume) {
             if(shouldSwapBack()){ swapBack(); }
             if(shouldAutoBuyback()){ triggerAutoBuyback(); }
+            //EDIT: shouldSendFunds() { triggerSendFunds() }
         }
 
         if(!isDividendExempt[sender]){ try distributor.setShare(sender, _balances[sender]) {} catch {} }
