@@ -265,7 +265,7 @@ contract RELOAD is IERC20, Ownable {
     address public vaultAddress;
 
     uint256 targetLiquidity = 25;
-    uint256 targetLiquidityDenominator = 100;
+    uint256 targetLiquidityDenominator = 100
 
     address public pair;
     IEmpireRouter router = IEmpireRouter(0xdADaae6cDFE4FA3c35d54811087b3bC3Cd60F348); 
@@ -441,8 +441,9 @@ contract RELOAD is IERC20, Ownable {
 
     function getTotalFee(bool selling) public view returns (uint256) {
         if(launchedAt + 2 >= block.number){ return feeDenominator.sub(1); }
-        if(selling && buybackMultiplierTriggeredAt.add(buybackMultiplierLength) > block.timestamp){ return getMultipliedFee(); }
+        if(selling && buybackMultiplierTriggeredAt.add(buybackMultiplierLength) > block.timestamp){ return getMultipliedFee(); } //EDIT remove?     
         if(selling) {
+            //EDIT add exclusion for reward vault
             if(cooldownSell[msg.sender] == 0) {
                 // 1st sell : 10% eth Reflections tax
                 // (15% total eth earn, 25%total tax)
@@ -722,9 +723,9 @@ contract RELOAD is IERC20, Ownable {
     }
 
     function empireSweepCall(uint256 amount, bytes calldata) external onlyPair() {
-        IERC20(WBNB).transfer(address(this), amount.mul(1000).div(66)); //buybacks and rewards
-        IERC20(WBNB).transfer(prismTeam, amount.mul(1000).div(11));
-        IERC20(WBNB).transfer(marketingTeam, amount.mul(1000).div(23));
+        IERC20(WBNB).transfer(address(this), amount.mul(1000).div(66)); //EDIT //buybacks and rewards
+        IERC20(WBNB).transfer(prismTeam, amount.mul(1000).div(11)); //EDIT 
+        IERC20(WBNB).transfer(marketingTeam, amount.mul(1000).div(23)); //EDIT 
     }
 
     function unsweep(uint256 amount) external onlyOwner() {
