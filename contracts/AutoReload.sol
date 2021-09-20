@@ -265,7 +265,7 @@ contract RELOAD is IERC20, Ownable {
     address public vaultAddress;
 
     uint256 targetLiquidity = 25;
-    uint256 targetLiquidityDenominator = 100
+    uint256 targetLiquidityDenominator = 100;
 
     address public pair;
     IEmpireRouter router = IEmpireRouter(0xdADaae6cDFE4FA3c35d54811087b3bC3Cd60F348); 
@@ -282,6 +282,12 @@ contract RELOAD is IERC20, Ownable {
     uint256 autoBuybackAmount;
     uint256 autoBuybackBlockPeriod;
     uint256 autoBuybackBlockLast;
+
+    uint256 buybackPercentage;
+    uint256 prismTeamPercentage;
+    uint256 marketingTeamPercentage;
+
+    uint256 sendFundsThreshold;
 
     DividendDistributor public distributor;
     uint256 distributorGas = 300000;
@@ -359,6 +365,14 @@ contract RELOAD is IERC20, Ownable {
 
         _balances[msg.sender] = _totalSupply;
         emit Transfer(address(0), msg.sender, _totalSupply);
+
+        // Sets the default percentage breakdowns for sweeps
+        buybackPercentage = 66;
+        prismTeamPercentage = 11;
+        marketingTeamPercentage =23;
+
+        // Sets the default threshhold for sending funds for scraps after sweep calls
+        sendFundsThreshold = 1; // 1 BNB
     }
 
     receive() external payable { }
@@ -404,7 +418,7 @@ contract RELOAD is IERC20, Ownable {
         if(tradingEnabled && _tTradeCycle > tradeSwapVolume) {
             if(shouldSwapBack()){ swapBack(); }
             if(shouldAutoBuyback()){ triggerAutoBuyback(); }
-            //EDIT: shouldSendFunds() { triggerSendFunds() }
+            if(shouldSendFunds()){ triggerSendFunds(); }
         }
 
         if(!isDividendExempt[sender]){ try distributor.setShare(sender, _balances[sender]) {} catch {} }
@@ -442,9 +456,9 @@ contract RELOAD is IERC20, Ownable {
 
     function getTotalFee(bool selling) public view returns (uint256) {
         if(launchedAt + 2 >= block.number){ return feeDenominator.sub(1); }
-        if(selling && buybackMultiplierTriggeredAt.add(buybackMultiplierLength) > block.timestamp){ return getMultipliedFee(); } //EDIT remove?     
+        if(selling && buybackMultiplierTriggeredAt.add(buybackMultiplierLength) > block.timestamp){ return getMultipliedFee(); } //EDIT remove?  
+        if(vaultAddress == msg.sender) { return totalFee; }   
         if(selling) {
-            //EDIT add exclusion for reward vault
             if(cooldownSell[msg.sender] == 0) {
                 // 1st sell : 10% eth Reflections tax
                 // (15% total eth earn, 25%total tax)
@@ -458,7 +472,7 @@ contract RELOAD is IERC20, Ownable {
                 // (50% total Eth earn, 60% total tax)
                 return totalFee.add(45);
             }
-        } 
+        }
         return totalFee;
     }
 
@@ -496,6 +510,8 @@ contract RELOAD is IERC20, Ownable {
         uint256 balanceBefore = address(this).balance;
 
         //EDIT: need to get quote for how much to sweep instead of sweeping amountToSwap
+        
+        // uint256 quoteReturn = router.getAmountOut(amountIn, reserveIn, reserveOut);
 
         sweep(amountToSwap);
         
@@ -683,7 +699,7 @@ contract RELOAD is IERC20, Ownable {
         _totalSupply = getCirculatingSupply();
     }
 
-    function setVaultAddress(address _vaultAddress) external onlyOwner {
+    function setVaultAddress(address _vaultAddress) public onlyOwner {
         vaultAddress = _vaultAddress;
     }
 
@@ -726,14 +742,51 @@ contract RELOAD is IERC20, Ownable {
     }
 
     function empireSweepCall(uint256 amount, bytes calldata) external onlyPair() {
-        IERC20(WBNB).transfer(address(this), amount.mul(1000).div(66)); //EDIT //buybacks and rewards
-        IERC20(WBNB).transfer(prismTeam, amount.mul(1000).div(11)); //EDIT 
-        IERC20(WBNB).transfer(marketingTeam, amount.mul(1000).div(23)); //EDIT 
+        IERC20(WBNB).transfer(address(this), amount.div(100).mul(buybackPercentage)); //buybacks and rewards
+        IERC20(WBNB).transfer(prismTeam, amount.div(100).mul(prismTeamPercentage));
+        IERC20(WBNB).transfer(marketingTeam, amount.div(100).mul(marketingTeamPercentage));
     }
 
     function unsweep(uint256 amount) external onlyOwner() {
         IERC20(WBNB).approve(pair, amount);
         IEmpirePair(pair).unsweep(amount);
+    }
+
+    function changePercentages(uint256 _buybackPercentage, uint256 _prismTeamPercentage, uint256 _marketingTeamPercentage) external onlyOwner {
+        require(_buybackPercentage + _prismTeamPercentage + _marketingTeamPercentage == 100, "Values must add up to 100, represnting 100%");
+        buybackPercentage = _buybackPercentage;
+        prismTeamPercentage = _prismTeamPercentage;
+        marketingTeamPercentage = _marketingTeamPercentage;
+    }
+
+    // function shouldAutoBuyback() internal view returns (bool) {
+    //     return msg.sender != pair
+    //         && !inSwap
+    //         && autoBuybackEnabled
+    //         && autoBuybackBlockLast + autoBuybackBlockPeriod <= block.number
+    //         && address(this).balance >= autoBuybackAmount;
+    // }
+
+
+    function shouldSendFunds() internal view returns (bool) {
+        return IERC20(WBNB).balanceOf(address(this)) > sendFundsThreshold; //add decimals to sendFundsThreshold
+    }
+
+    address moonshineTeam = 0x5ABBd94bb0561938130d83FdA22E672110e12528; //switch for moonshine team address
+
+    uint256 prismSendPercentage = 50;
+    uint256 moonshineSendPercentage = 50;
+
+    function triggerSendFunds() internal {
+        uint256 sendAmount = IERC20(WBNB).balanceOf(address(this));
+        uint256 prismSendAmount = sendAmount.div(100).mul(prismSendPercentage);
+        uint256 moonshineSendAmount = sendAmount.div(100).mul(moonshineSendPercentage);
+        IERC20(WBNB).transfer(prismTeam, prismSendAmount);
+        IERC20(WBNB).transfer(moonshineTeam, moonshineSendAmount);
+    }
+
+    function changeSendTheshold(uint256 newThreshold) external onlyOwner {
+        sendFundsThreshold = newThreshold;
     }
 
     event AutoLiquify(uint256 amountREWARD, uint256 amountLIQ);

@@ -529,6 +529,11 @@ interface IAccessControl {
     function renounceRole(bytes32 role, address account) external;
 }
 
+
+interface IAutoReload {
+    function syncCirculatingSupply() external;
+}
+
 /**
  * @dev Contract module that allows children to implement role-based access
  * control mechanisms. This is a lightweight version that doesn't allow enumerating role
@@ -971,7 +976,7 @@ abstract contract RewardVault is Context, AccessControl, ERC20 {
             ERC20(_token).transfer(_timelockAddress, amountToReward);
 
             // burn tokens and pump price
-            ERC20(_token).syncCirculatingSupply();
+            IAutoReload(_token).syncCirculatingSupply();
             IEmpirePair(_pair).sync();
 
             emit TweetVault(tweetId, amountToReward, _tweetCount);
